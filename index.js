@@ -1,9 +1,58 @@
+require("dotenv").config();
 const express = require('express')
+const cors = require('cors');
 const app = express()
-const port = 3000
+const port = process.env.PORT || 3000;
+const { MongoClient, ServerApiVersion } = require('mongodb');
+
+// middleWare
+app.use(cors())
+app.use(express.json())
+
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.5tck6.mongodb.net/?appName=Cluster0`;
+
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
+});
+async function run() {
+  try {
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
+    const db = client.db("local_chef_bazaar_db")
+    const mealsCollection = db.collection("meals")
+    const reviewsCollection = db.collection("reviews")
+
+
+   app.get("/meals",async(req,res)=>{
+    const meal = req.body
+    const result = await mealsCollection.find(meal).sort({rating:-1}).toArray()
+    res.send(result)
+   })
+
+   app.get("/reviews",async(req,res)=>{
+    const reviews = req.body
+    const result = await reviewsCollection.find(reviews).sort({rating:-1}).toArray()
+    res.send(result)
+   })
+
+
+
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  } finally {
+    // Ensures that the client will close when you finish/error
+    // await client.close();
+  }
+}
+run().catch(console.dir);
 
 app.get('/', (req, res) => {
-  res.send('Hello World!')
+  res.send('Hello Local Chef Bazaar!')
 })
 
 app.listen(port, () => {

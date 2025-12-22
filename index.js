@@ -4,10 +4,37 @@ const cors = require('cors');
 const app = express()
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const admin = require("firebase-admin");
+
+const serviceAccount = require("./local-chef-bazaar-adminkey.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
 
 // middleWare
 app.use(cors())
 app.use(express.json())
+
+const verifyFBToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).send({ message: "Unauthorized access" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decodedUser = await admin.auth().verifyIdToken(token);
+    req.user = decodedUser;
+    next();
+  } catch (error) {
+    return res.status(403).send({ message: "Forbidden access" });
+  }
+};
+
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.5tck6.mongodb.net/?appName=Cluster0`;
 
@@ -28,6 +55,7 @@ async function run() {
     const usersCollection = db.collection('users')
     const favouritesCollection = db.collection("favourites")
     const orderCollection = db.collection("order_collection");
+    const roleRequestCollection = db.collection("request")
 
 
    app.get("/meals",async(req,res)=>{
@@ -76,6 +104,7 @@ app.get("/meals/:id", async (req, res) => {
   res.send(result);
 });
 
+// order
 app.post("/orders", async (req, res) => {
   const order = req.body;
 
@@ -106,6 +135,7 @@ app.post("/orders", async (req, res) => {
       const user = req.body;
       user.role = "user";
       user.createdAt = new Date();
+      user.status="active"
       const email = user.email;
       const userExists = await usersCollection.findOne({ email });
       if (userExists) {
@@ -116,6 +146,34 @@ app.post("/orders", async (req, res) => {
     });
 
 
+// profile
+app.get('/users/:email', verifyFBToken, async (req, res) => {
+  const email = req.params.email
+  const result = await usersCollection.findOne({ email })
+  res.send(result)
+})
+
+// post role
+app.post('/role-requests', async (req, res) => {
+  const request = req.body
+ const exists = await roleRequestCollection.findOne({
+    userEmail: request.userEmail,
+    requestType: request.requestType,
+    requestStatus: "pending"
+  });
+
+  if (exists) {
+    return res.status(409).send({
+      message: "request already exists"
+    });
+  }
+
+  request.requestTime = new Date();
+  request.requestStatus = "pending";
+
+  const result = await roleRequestCollection.insertOne(request)
+  res.send(result)
+})
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });

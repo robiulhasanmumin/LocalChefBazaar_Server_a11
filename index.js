@@ -26,6 +26,7 @@ async function run() {
     const mealsCollection = db.collection("meals")
     const reviewsCollection = db.collection("reviews")
     const usersCollection = db.collection('users')
+    const favouritesCollection = db.collection("favourites")
 
 
    app.get("/meals",async(req,res)=>{
@@ -36,8 +37,9 @@ async function run() {
 
   //  reviews
    app.get("/reviews",async(req,res)=>{
-    const foodId = req.query.foodId;
-    const result = await reviewsCollection.find(foodId).sort({date:-1}).toArray()
+    const {foodId} = req.query;
+    const query = foodId ? { foodId } : {};
+    const result = await reviewsCollection.find(query).sort({date:-1}).toArray()
     res.send(result)
    })
 
@@ -47,6 +49,25 @@ async function run() {
   const result = await reviewsCollection.insertOne(review);
   res.send(result);
    })
+
+  //  favourites
+  app.post("/favourites", async (req, res) => {
+  const favourite = req.body;
+
+  const exists = await favouritesCollection.findOne({
+    userEmail: favourite.userEmail,
+    mealId: favourite.mealId,
+  });
+
+  if (exists) {
+    return res.send({ message: "already exists" });
+  }
+
+  favourite.addedTime = new Date();
+  const result = await favouritesCollection.insertOne(favourite);
+  res.send(result);
+});
+
 
   //  users
    app.post("/users", async (req, res) => {

@@ -34,10 +34,18 @@ async function run() {
     res.send(result)
    })
 
+  //  reviews
    app.get("/reviews",async(req,res)=>{
-    const reviews = req.body
-    const result = await reviewsCollection.find(reviews).sort({rating:-1}).toArray()
+    const foodId = req.query.foodId;
+    const result = await reviewsCollection.find(foodId).sort({date:-1}).toArray()
     res.send(result)
+   })
+
+   app.post("/reviews",async(req,res)=>{
+     const review = req.body;
+     review.date = new Date();
+  const result = await reviewsCollection.insertOne(review);
+  res.send(result);
    })
 
   //  users

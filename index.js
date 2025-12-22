@@ -3,7 +3,7 @@ const express = require('express')
 const cors = require('cors');
 const app = express()
 const port = process.env.PORT || 3000;
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 // middleWare
 app.use(cors())
@@ -27,6 +27,7 @@ async function run() {
     const reviewsCollection = db.collection("reviews")
     const usersCollection = db.collection('users')
     const favouritesCollection = db.collection("favourites")
+    const orderCollection = db.collection("order_collection");
 
 
    app.get("/meals",async(req,res)=>{
@@ -34,6 +35,13 @@ async function run() {
     const result = await mealsCollection.find(meal).sort({rating:-1}).toArray()
     res.send(result)
    })
+
+app.get("/meals/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = {_id:new ObjectId(id)}
+  const result = await mealsCollection.findOne(query);
+  res.send(result);
+});
 
   //  reviews
    app.get("/reviews",async(req,res)=>{
@@ -67,6 +75,30 @@ async function run() {
   const result = await favouritesCollection.insertOne(favourite);
   res.send(result);
 });
+
+app.post("/orders", async (req, res) => {
+  const order = req.body;
+
+  order.orderStatus = "pending";
+  order.paymentStatus = "Pending";
+
+   const existingOrder = await orderCollection.findOne({
+    foodId: order.foodId,
+    userEmail: order.userEmail,
+    quantity: order.quantity,
+  });
+
+  if (existingOrder) {
+    return res.status(409).send({
+      message: "Same order with same quantity already exists",
+    });
+  }
+  order.orderTime = new Date(order.orderTime);
+
+  const result = await orderCollection.insertOne(order);
+  res.send(result);
+});
+
 
 
   //  users

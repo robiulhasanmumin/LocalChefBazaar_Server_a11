@@ -25,6 +25,7 @@ async function run() {
     const db = client.db("local_chef_bazaar_db")
     const mealsCollection = db.collection("meals")
     const reviewsCollection = db.collection("reviews")
+    const usersCollection = db.collection('users')
 
 
    app.get("/meals",async(req,res)=>{
@@ -38,6 +39,20 @@ async function run() {
     const result = await reviewsCollection.find(reviews).sort({rating:-1}).toArray()
     res.send(result)
    })
+
+  //  users
+   app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+      const email = user.email;
+      const userExists = await usersCollection.findOne({ email });
+      if (userExists) {
+        return res.send({ message: "user exist" });
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
 
 
 

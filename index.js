@@ -5,6 +5,7 @@ const app = express()
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const admin = require("firebase-admin");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const serviceAccount = require("./local-chef-bazaar-adminkey.json");
 
@@ -56,6 +57,7 @@ async function run() {
     const favouritesCollection = db.collection("favourites")
     const orderCollection = db.collection("order_collection");
     const roleRequestCollection = db.collection("request")
+    const paymentsCollection = db.collection("payments");
 
 
    app.get("/meals",async(req,res)=>{
@@ -104,6 +106,7 @@ app.get("/meals/:id", async (req, res) => {
   res.send(result);
 });
 
+
 // order
 app.post("/orders", async (req, res) => {
   const order = req.body;
@@ -127,6 +130,30 @@ app.post("/orders", async (req, res) => {
   const result = await orderCollection.insertOne(order);
   res.send(result);
 });
+
+app.get("/orders/user/:email", verifyFBToken, async (req, res) => {
+  const email = req.params.email;
+
+  if (req.user.email !== email) {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const orders = await orderCollection.find({ userEmail: email }).sort({ orderTime: -1 }).toArray();
+
+  res.send(orders);
+});
+
+app.patch("/orders/:id/accept", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await orderCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { orderStatus: "accepted" } }
+  );
+
+  res.send(result);
+});
+
 
 
 
@@ -174,6 +201,41 @@ app.post('/role-requests', async (req, res) => {
   const result = await roleRequestCollection.insertOne(request)
   res.send(result)
 })
+
+
+// payment
+app.post("/create-payment-intent", verifyFBToken, async (req, res) => {
+  const { amount } = req.body; 
+   const amountInCents = Math.round(amount * 100);
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: "usd",
+    });
+    res.send({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.post("/payments", verifyFBToken, async (req, res) => {
+  const payment = req.body;
+  payment.paymentTime = new Date();
+  await paymentsCollection.insertOne(payment);
+  await orderCollection.updateOne(
+    { _id: new ObjectId(payment.orderId) },
+    { $set: { paymentStatus: "paid" } }
+  );
+
+  res.send({ success: true });
+});
+
+
+
+
+
+
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });

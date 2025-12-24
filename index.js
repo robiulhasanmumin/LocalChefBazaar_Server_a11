@@ -8,6 +8,7 @@ const admin = require("firebase-admin");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const serviceAccount = require("./local-chef-bazaar-adminkey.json");
+const { date } = require("yup");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -20,6 +21,7 @@ app.use(express.json())
 
 const verifyFBToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
+  // console.log("Authorization header:", req.headers.authorization);
 
   if (!authHeader) {
     return res.status(401).send({ message: "Unauthorized access" });
@@ -46,6 +48,7 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -173,7 +176,7 @@ app.patch("/orders/:id/accept", async (req, res) => {
     });
 
 
-// profile
+// profile dashboard
 app.get('/users/:email', verifyFBToken, async (req, res) => {
   const email = req.params.email
   const result = await usersCollection.findOne({ email })
@@ -203,7 +206,7 @@ app.post('/role-requests', async (req, res) => {
 })
 
 
-// payment
+// payment dashboard
 app.post("/create-payment-intent", verifyFBToken, async (req, res) => {
   const { amount } = req.body; 
    const amountInCents = Math.round(amount * 100);
@@ -229,6 +232,54 @@ app.post("/payments", verifyFBToken, async (req, res) => {
 
   res.send({ success: true });
 });
+
+
+// Reviews dashboard
+ app.get("/reviews/:email", verifyFBToken, async (req, res) => {
+      const email = req.params.email;
+
+      if (req.user.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      const result = await reviewsCollection.find({ email: email }).sort({ date: -1 }).toArray();
+      res.send(result);
+    });
+
+    app.delete("/reviews/:id", verifyFBToken, async (req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const review = await reviewsCollection.findOne(query);
+
+      if (!review) return res.status(404).send({ message: "Review not found" });
+      if (review.email !== req.user.email)
+        return res.status(403).send({ message: "Forbidden" });
+
+      const result = await reviewsCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.put("/reviews/:id", verifyFBToken, async (req, res) => {
+      const id = req.params.id;
+      const { rating, comment } = req.body;
+      const query = {_id: new ObjectId(id)}
+
+      const review = await reviewsCollection.findOne(query);
+      if (!review) return res.status(404).send({ message: "Review not found" });
+      if (review.email !== req.user.email)
+        return res.status(403).send({ message: "Forbidden" });
+
+      const updateDocs = {
+        $set:{
+          rating:rating,
+          comment:comment,
+          date:new Date()
+        }
+      }
+      const result = await reviewsCollection.updateOne(query,updateDocs );
+      res.send(result);
+    });
+
 
 
 

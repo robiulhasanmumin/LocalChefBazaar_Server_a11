@@ -175,6 +175,15 @@ app.patch("/orders/:id/accept", async (req, res) => {
       res.send(result);
     });
 
+app.get("/users/role/:email", async (req, res) => {
+  const email = req.params.email;
+  const user = await usersCollection.findOne({ email });
+  if (!user) {
+    return res.send({ role: "user" });
+  }
+  res.send({ role: user.role || "user" });
+});
+
 
 // profile dashboard
 app.get('/users/:email', verifyFBToken, async (req, res) => {

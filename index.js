@@ -281,6 +281,34 @@ app.post("/payments", verifyFBToken, async (req, res) => {
     });
 
 
+    // favourites dashboard
+     app.get("/favourites/:email", verifyFBToken, async (req, res) => {
+      const email = req.params.email;
+
+      if (req.user.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      const result = await favouritesCollection.find({ userEmail: email }).sort({ addedTime: -1 }).toArray();
+      res.send(result);
+    });
+
+    app.delete("/favourites/:id", verifyFBToken, async (req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const favourite = await favouritesCollection.findOne(query);
+
+      if (!favourite) return res.status(404).send({ message: "favourite not found" });
+      if (favourite.userEmail !== req.user.email)
+        return res.status(403).send({ message: "Forbidden" });
+
+      const result = await favouritesCollection.deleteOne(query);
+      res.send(result);
+    });
+
+
+
+
 
 
 

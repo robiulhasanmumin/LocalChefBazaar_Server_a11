@@ -1,0 +1,451 @@
+require("dotenv").config();
+const express = require('express')
+const cors = require('cors');
+const app = express()
+const port = process.env.PORT || 3000;
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const admin = require("firebase-admin");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+const serviceAccount = require("./local-chef-bazaar-adminkey.json");
+const { date } = require("yup");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
+// middleWare
+app.use(cors())
+app.use(express.json())
+
+const verifyFBToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  // console.log("Authorization header:", req.headers.authorization);
+
+  if (!authHeader) {
+    return res.status(401).send({ message: "Unauthorized access" });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    const decodedUser = await admin.auth().verifyIdToken(token);
+    req.user = decodedUser;
+    next();
+  } catch (error) {
+    return res.status(403).send({ message: "Forbidden access" });
+  }
+};
+
+
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.5tck6.mongodb.net/?appName=Cluster0`;
+
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
+});
+
+async function run() {
+  try {
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
+    const db = client.db("local_chef_bazaar_db")
+    const mealsCollection = db.collection("meals")
+    const reviewsCollection = db.collection("reviews")
+    const usersCollection = db.collection('users')
+    const favouritesCollection = db.collection("favourites")
+    const orderCollection = db.collection("order_collection");
+    const roleRequestCollection = db.collection("request")
+    const paymentsCollection = db.collection("payments");
+
+    const verifyAdmin = async (req, res, next) => {
+  const email = req.user.email;
+  const user = await usersCollection.findOne({ email });
+
+  if (user?.role !== 'admin') {
+    return res.status(403).send({ message: "Admin only" });
+  }
+  next();
+};
+
+
+
+   app.get("/meals",async(req,res)=>{
+    const meal = req.body
+    const result = await mealsCollection.find(meal).sort({rating:-1}).toArray()
+    res.send(result)
+   })
+
+app.get("/meals/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = {_id:new ObjectId(id)}
+  const result = await mealsCollection.findOne(query);
+  res.send(result);
+});
+
+  //  reviews
+   app.get("/reviews",async(req,res)=>{
+    const {foodId} = req.query;
+    const query = foodId ? { foodId } : {};
+    const result = await reviewsCollection.find(query).sort({date:-1}).toArray()
+    res.send(result)
+   })
+
+   app.post("/reviews",async(req,res)=>{
+     const review = req.body;
+     review.date = new Date();
+  const result = await reviewsCollection.insertOne(review);
+  res.send(result);
+   })
+
+  //  favourites
+  app.post("/favourites", async (req, res) => {
+  const favourite = req.body;
+
+  const exists = await favouritesCollection.findOne({
+    userEmail: favourite.userEmail,
+    mealId: favourite.mealId,
+  });
+
+  if (exists) {
+    return res.send({ message: "already exists" });
+  }
+
+  favourite.addedTime = new Date();
+  const result = await favouritesCollection.insertOne(favourite);
+  res.send(result);
+});
+
+
+// order
+app.post("/orders", async (req, res) => {
+  const order = req.body;
+
+  order.orderStatus = "pending";
+  order.paymentStatus = "Pending";
+
+   const existingOrder = await orderCollection.findOne({
+    foodId: order.foodId,
+    userEmail: order.userEmail,
+    quantity: order.quantity,
+  });
+  
+   const user = await usersCollection.findOne({
+    email: order.userEmail
+  });
+
+  if (user?.status === "fraud") {
+    return res.status(403).send({
+      message: "Fraud users cannot place orders"
+    });
+  }
+
+  if (existingOrder) {
+    return res.status(409).send({
+      message: "Same order with same quantity already exists",
+    });
+  }
+  order.orderTime = new Date(order.orderTime);
+
+  const result = await orderCollection.insertOne(order);
+  res.send(result);
+});
+
+app.get("/orders/user/:email", verifyFBToken, async (req, res) => {
+  const email = req.params.email;
+
+  if (req.user.email !== email) {
+    return res.status(403).send({ message: "Forbidden" });
+  }
+
+  const orders = await orderCollection.find({ userEmail: email }).sort({ orderTime: -1 }).toArray();
+
+  res.send(orders);
+});
+
+app.patch("/orders/:id/accept", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await orderCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { orderStatus: "accepted" } }
+  );
+
+  res.send(result);
+});
+
+
+
+
+  //  users
+   app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+      user.status="active"
+      const email = user.email;
+      const userExists = await usersCollection.findOne({ email });
+      if (userExists) {
+        return res.send({ message: "user exist" });
+      }
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
+
+app.get("/users/role/:email", async (req, res) => {
+  const email = req.params.email;
+  const user = await usersCollection.findOne({ email });
+  if (!user) {
+    return res.send({ role: "user" });
+  }
+  res.send({ role: user.role || "user" });
+});
+
+
+// profile dashboard
+app.get('/users/:email', verifyFBToken, async (req, res) => {
+  const email = req.params.email
+  const result = await usersCollection.findOne({ email })
+  res.send(result)
+})
+
+// post role
+app.post('/role-requests', async (req, res) => {
+  const request = req.body
+ const exists = await roleRequestCollection.findOne({
+    userEmail: request.userEmail,
+    requestType: request.requestType,
+    requestStatus: "pending"
+  });
+
+  if (exists) {
+    return res.status(409).send({
+      message: "request already exists"
+    });
+  }
+
+  request.requestTime = new Date();
+  request.requestStatus = "pending";
+
+  const result = await roleRequestCollection.insertOne(request)
+  res.send(result)
+})
+
+
+// payment dashboard
+app.post("/create-payment-intent", verifyFBToken, async (req, res) => {
+  const { amount } = req.body; 
+   const amountInCents = Math.round(amount * 100);
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: "usd",
+    });
+    res.send({ clientSecret: paymentIntent.client_secret });
+  } catch (error) {
+    res.status(500).send({ error: error.message });
+  }
+});
+
+app.post("/payments", verifyFBToken, async (req, res) => {
+  const payment = req.body;
+  payment.paymentTime = new Date();
+  await paymentsCollection.insertOne(payment);
+  await orderCollection.updateOne(
+    { _id: new ObjectId(payment.orderId) },
+    { $set: { paymentStatus: "paid" } }
+  );
+
+  res.send({ success: true });
+});
+
+
+// Reviews dashboard
+ app.get("/reviews/:email", verifyFBToken, async (req, res) => {
+      const email = req.params.email;
+
+      if (req.user.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      const result = await reviewsCollection.find({ email: email }).sort({ date: -1 }).toArray();
+      res.send(result);
+    });
+
+    app.delete("/reviews/:id", verifyFBToken, async (req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const review = await reviewsCollection.findOne(query);
+
+      if (!review) return res.status(404).send({ message: "Review not found" });
+      if (review.email !== req.user.email)
+        return res.status(403).send({ message: "Forbidden" });
+
+      const result = await reviewsCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    app.put("/reviews/:id", verifyFBToken, async (req, res) => {
+      const id = req.params.id;
+      const { rating, comment } = req.body;
+      const query = {_id: new ObjectId(id)}
+
+      const review = await reviewsCollection.findOne(query);
+      if (!review) return res.status(404).send({ message: "Review not found" });
+      if (review.email !== req.user.email)
+        return res.status(403).send({ message: "Forbidden" });
+
+      const updateDocs = {
+        $set:{
+          rating:rating,
+          comment:comment,
+          date:new Date()
+        }
+      }
+      const result = await reviewsCollection.updateOne(query,updateDocs );
+      res.send(result);
+    });
+
+
+    // favourites dashboard
+     app.get("/favourites/:email", verifyFBToken, async (req, res) => {
+      const email = req.params.email;
+
+      if (req.user.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+
+      const result = await favouritesCollection.find({ userEmail: email }).sort({ addedTime: -1 }).toArray();
+      res.send(result);
+    });
+
+    app.delete("/favourites/:id", verifyFBToken, async (req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const favourite = await favouritesCollection.findOne(query);
+
+      if (!favourite) return res.status(404).send({ message: "favourite not found" });
+      if (favourite.userEmail !== req.user.email)
+        return res.status(403).send({ message: "Forbidden" });
+
+      const result = await favouritesCollection.deleteOne(query);
+      res.send(result);
+    });
+
+
+    // admin manage user
+app.get('/users', verifyFBToken, verifyAdmin, async (req, res) => {
+  const users = await usersCollection.find().toArray();
+  res.send(users);
+});
+
+app.patch('/users/fraud/:id', verifyFBToken, verifyAdmin, async (req, res) => {
+  const id = req.params.id;
+
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status: 'fraud' } }
+  );
+
+  res.send(result);
+});
+
+// admin manage request
+app.get("/role-requests", verifyFBToken, verifyAdmin, async (req, res) => {
+  const requests = await roleRequestCollection
+    .find()
+    .sort({ requestTime: -1 })
+    .toArray();
+
+  res.send(requests);
+});
+
+app.patch("/role-requests/accept/:id",verifyFBToken,verifyAdmin,
+  async (req, res) => {
+    const id = req.params.id;
+    const query = {_id: new ObjectId(id)}
+
+    const request = await roleRequestCollection.findOne(query);
+
+    if (!request) {
+      return res.status(404).send({ message: "Request not found" });
+    }
+
+    // CHEF REQUEST
+    if (request.requestType === "chef") {
+      const chefId = "chef-" + Math.floor(1000 + Math.random() * 9000);
+
+      await usersCollection.updateOne(
+        { email: request.userEmail },
+        {
+          $set: {
+            role: "chef",
+            chefId: chefId,
+          },
+        }
+      );
+    }
+
+    // ADMIN REQUEST
+    if (request.requestType === "admin") {
+      await usersCollection.updateOne(
+        { email: request.userEmail },
+        { $set: { role: "admin" } }
+      );
+    }
+
+    //  Update request status
+    await roleRequestCollection.updateOne(
+      query,
+      { $set: { requestStatus: "approved" } }
+    );
+
+    res.send({ success: true });
+  }
+);
+
+app.patch("/role-requests/reject/:id",verifyFBToken,verifyAdmin,
+  async (req, res) => {
+    const id = req.params.id;
+
+    await roleRequestCollection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { requestStatus: "rejected" } }
+    );
+
+    res.send({ success: true });
+  }
+);
+
+
+
+
+
+
+
+
+
+
+
+
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  } finally {
+    // Ensures that the client will close when you finish/error
+    // await client.close();
+  }
+}
+run().catch(console.dir);
+
+app.get('/', (req, res) => {
+  res.send('Hello Local Chef Bazaar!')
+})
+
+app.listen(port, () => {
+  console.log(`Example app listening on port ${port}`)
+})

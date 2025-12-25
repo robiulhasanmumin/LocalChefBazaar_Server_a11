@@ -422,6 +422,32 @@ app.patch("/role-requests/reject/:id",verifyFBToken,verifyAdmin,
 );
 
 
+// Admin stat
+app.get('/admin/stats', verifyFBToken, verifyAdmin, async (req, res) => {
+  try {
+    const totalPaymentsAgg = await paymentsCollection.aggregate([
+      { $group: { _id: null, totalAmount: { $sum: "$amount" } } }
+    ]).toArray();
+
+    const totalUsers = await usersCollection.countDocuments();
+
+    const ordersPending = await orderCollection.countDocuments({ orderStatus: "pending" });
+    const ordersDelivered = await orderCollection.countDocuments({ orderStatus: "delivered" });
+
+    res.send({
+      totalPayments: totalPaymentsAgg[0]?.totalAmount || 0,
+      totalUsers,
+      ordersPending,
+      ordersDelivered
+    });
+
+  } catch (err) {
+    res.status(500).send({ error: err.message });
+  }
+});
+
+
+
 
 
 

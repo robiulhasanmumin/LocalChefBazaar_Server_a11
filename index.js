@@ -377,7 +377,7 @@ app.patch("/role-requests/accept/:id",verifyFBToken,verifyAdmin,
 
     // CHEF REQUEST
     if (request.requestType === "chef") {
-      const chefId = "chef-" + Math.floor(1000 + Math.random() * 9000);
+      const chefId = "CHEF-" + Math.floor(1000 + Math.random() * 9000);
 
       await usersCollection.updateOne(
         { email: request.userEmail },
@@ -445,6 +445,43 @@ app.get('/admin/stats', verifyFBToken, verifyAdmin, async (req, res) => {
     res.status(500).send({ error: err.message });
   }
 });
+
+
+// chef create meals
+app.post("/meals", verifyFBToken, async (req, res) => {
+  const meal = req.body;
+
+  meal.rating = 0;
+  meal.createdAt = new Date();
+
+  const result = await mealsCollection.insertOne(meal);
+  res.send(result);
+});
+
+app.get("/meals/chef/:email", verifyFBToken, async (req, res) => {
+  const email = req.params.email;
+  const result = await mealsCollection.find({ userEmail: email }).toArray();
+  res.send(result);
+});
+
+app.delete("/meals/:id", verifyFBToken, async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) }
+  const result = await mealsCollection.deleteOne(query);
+  res.send(result);
+});
+
+app.patch("/meals/:id", verifyFBToken, async (req, res) => {
+  const id = req.params.id;
+  const updatedMeal = req.body;
+  const query = { _id: new ObjectId(id) }
+  const result = await mealsCollection.updateOne(
+    query, { $set: updatedMeal }
+  );
+
+  res.send(result);
+});
+
 
 
 

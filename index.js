@@ -451,7 +451,7 @@ app.get('/admin/stats', verifyFBToken, verifyAdmin, async (req, res) => {
 
     const totalUsers = await usersCollection.countDocuments();
 
-    const ordersPending = await orderCollection.countDocuments({ orderStatus: "pending" });
+    const ordersPending = await orderCollection.countDocuments({ orderStatus: { $regex: /^pending$/i } });
     const ordersDelivered = await orderCollection.countDocuments({ orderStatus: "delivered" });
 
     res.send({

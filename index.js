@@ -7,8 +7,14 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const admin = require("firebase-admin");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-const serviceAccount = require("./local-chef-bazaar-adminkey.json");
-const { date } = require("yup");
+// const serviceAccount = require("./local-chef-bazaar-adminkey.json");
+// const { date } = require("yup");
+
+// // const serviceAccount = require("./firebase-admin-key.json");
+
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
+
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -566,8 +572,8 @@ app.patch("/orders/deliver/:id", async (req, res) => {
 
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

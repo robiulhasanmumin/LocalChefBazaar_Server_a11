@@ -237,19 +237,39 @@ app.post('/role-requests', async (req, res) => {
 
 
 // payment dashboard
-app.post("/create-payment-intent", verifyFBToken, async (req, res) => {
-  const { amount } = req.body; 
-   const amountInCents = Math.round(amount * 100);
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amountInCents,
-      currency: "usd",
-    });
-    res.send({ clientSecret: paymentIntent.client_secret });
-  } catch (error) {
-    res.status(500).send({ error: error.message });
-  }
+app.post("/create-checkout-session", async (req, res) => {
+  const { orderId, amount } = req.body;
+
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "bdt",
+          product_data: {
+            name: "Meal Order Payment",
+          },
+          unit_amount: amount * 100,
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: `http://localhost:5173/dashboard/payment-success?orderId=${orderId}&amount=${amount}`,
+    cancel_url: `http://localhost:5173/dashboard/payment-cancel`,
+  });
+
+  res.send({ url: session.url });
 });
+
+app.patch("/orders/pay/:id", async (req, res) => {
+  await orderCollection.updateOne(
+    { _id: new ObjectId(req.params.id) },
+    { $set: { paymentStatus: "paid" } }
+  );
+  res.send({ success: true });
+});
+
 
 app.post("/payments", verifyFBToken, async (req, res) => {
   const payment = req.body;
@@ -262,6 +282,7 @@ app.post("/payments", verifyFBToken, async (req, res) => {
 
   res.send({ success: true });
 });
+
 
 
 // Reviews dashboard
@@ -426,8 +447,7 @@ app.patch("/role-requests/reject/:id",verifyFBToken,verifyAdmin,
 app.get('/admin/stats', verifyFBToken, verifyAdmin, async (req, res) => {
   try {
     const totalPaymentsAgg = await paymentsCollection.aggregate([
-      { $group: { _id: null, totalAmount: { $sum: "$amount" } } }
-    ]).toArray();
+      { $group: { _id: null, totalAmount: { $sum: { $toDouble: "$amount" } } } }]).toArray();
 
     const totalUsers = await usersCollection.countDocuments();
 
@@ -480,6 +500,56 @@ app.patch("/meals/:id", verifyFBToken, async (req, res) => {
   );
 
   res.send(result);
+});
+
+// Chef order controll
+app.get("/orders/chef/:chefId", async (req, res) => {
+  const chefId = req.params.chefId;
+
+  const orders = await orderCollection
+    .find({ chefId })
+    .sort({ orderTime: -1 })
+    .toArray();
+
+  res.send(orders);
+});
+
+app.patch("/orders/accept/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await orderCollection.updateOne(
+    { _id: new ObjectId(id), orderStatus: "pending" },
+    { $set: { orderStatus: "accepted" } }
+  );
+
+  res.send(result);
+});
+
+app.patch("/orders/cancel/:id", async (req, res) => {
+  const id = req.params.id;
+
+  const result = await orderCollection.updateOne(
+    { _id: new ObjectId(id), orderStatus: "pending" },
+    { $set: { orderStatus: "cancelled" } }
+  );
+
+  res.send(result);
+});
+
+app.patch("/orders/deliver/:id", async (req, res) => {
+  const id = req.params.id;
+ const order = await orderCollection.findOne({ _id: new ObjectId(id) });
+
+  if (order.paymentStatus !== "paid") {
+    return res.status(400).send({ message: "Payment not completed" });
+  }
+
+  await orderCollection.updateOne(
+    { _id: new ObjectId(id)},
+    { $set: { orderStatus: "delivered" } }
+  );
+
+  res.send({ success: true });
 });
 
 

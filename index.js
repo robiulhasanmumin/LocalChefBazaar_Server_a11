@@ -22,7 +22,15 @@ admin.initializeApp({
 
 
 // middleWare
-app.use(cors())
+app.use(cors({
+  origin: [
+    "http://localhost:5173", 
+    "https://local-chef-bazaar-server-gold.vercel.app",  
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+}))
+
 app.use(express.json())
 
 const verifyFBToken = async (req, res, next) => {

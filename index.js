@@ -68,6 +68,7 @@ async function run() {
     const roleRequestCollection = db.collection("request")
     const paymentsCollection = db.collection("payments");
 
+
     const verifyAdmin = async (req, res, next) => {
   const email = req.user.email;
   const user = await usersCollection.findOne({ email });
@@ -78,6 +79,30 @@ async function run() {
   next();
 };
 
+app.get('/public-stats', async (req, res) => {
+    try {
+         const totalUsers = await usersCollection.countDocuments();
+
+         const totalMeals = await mealsCollection.countDocuments();
+
+         const ordersDelivered = await orderCollection.countDocuments({ 
+            orderStatus: "delivered" 
+        });
+
+         const happyClients = totalUsers; 
+
+         res.send({
+            totalUsers,
+            totalMeals,
+            ordersDelivered,
+            happyClients
+        });
+
+    } catch (err) {
+        console.error("Public Stats Error:", err.message);
+        res.status(500).send({ error: "Failed to fetch public statistics" });
+    }
+});
 
 
    app.get("/meals",async(req,res)=>{
@@ -557,6 +582,7 @@ app.patch("/orders/deliver/:id", async (req, res) => {
 
   res.send({ success: true });
 });
+
 
 
 

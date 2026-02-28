@@ -113,40 +113,59 @@ app.get('/public-stats', async (req, res) => {
 });
 
 
-   app.get("/meals",async(req,res)=>{
-    const meal = req.body
-    const result = await mealsCollection.find(meal).sort({rating:-1}).toArray()
-    res.send(result)
-   })
+  //  app.get("/meals",async(req,res)=>{
+  //   const meal = req.body
+  //   const result = await mealsCollection.find(meal).sort({rating:-1}).toArray()
+  //   res.send(result)
+  //  })
+
+// আপনার সার্ভারের এই অংশটুকু এভাবে আপডেট করুন
+
 
 app.get('/meals', async (req, res) => {
     const { search, rating, maxPrice, sort, page, limit } = req.query;
 
-     let query = {};
-    if (search) query.foodName = { $regex: search, $options: 'i' };
-    if (rating) query.rating = { $gte: parseFloat(rating) };  
-    if (maxPrice) query.price = { $lte: parseFloat(maxPrice) };  
+    let query = {};
+    
+     if (search) {
+        query.foodName = { $regex: search, $options: 'i' };
+    }
+
+     if (rating && rating !== "") {
+        query.rating = { $gte: parseFloat(rating) };
+    }
+
+     if (maxPrice) {
+        query.price = { $lte: parseFloat(maxPrice) };
+    }
 
      let sortOptions = {};
-    if (sort === 'asc') sortOptions.price = 1;  // Low to High
-    if (sort === 'desc') sortOptions.price = -1; // High to Low
+    if (sort === 'asc') {
+        sortOptions.price = 1;  
+    } else if (sort === 'desc') {
+        sortOptions.price = -1; 
+    } else {
+        sortOptions.rating = -1;
+    }
 
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 8;
+    const skip = (pageNum - 1) * limitNum;
 
     try {
         const meals = await mealsCollection.find(query)
             .sort(sortOptions)
-            .skip((pageNum - 1) * limitNum)
+            .skip(skip)
             .limit(limitNum)
             .toArray();
 
         const totalMeals = await mealsCollection.countDocuments(query);
         const totalPage = Math.ceil(totalMeals / limitNum);
 
-        res.send({ meals, totalPage });
+         res.send({ meals, totalPage });
     } catch (error) {
-        res.status(500).send({ message: "Error" });
+        console.error("Meals fetching error:", error);
+        res.status(500).send({ message: "Internal Server Error" });
     }
 });
 

@@ -75,6 +75,7 @@ async function run() {
     const orderCollection = db.collection("order_collection");
     const roleRequestCollection = db.collection("request")
     const paymentsCollection = db.collection("payments");
+    const contactCollection = db.collection("contactMessages");
 
 
     const verifyAdmin = async (req, res, next) => {
@@ -112,6 +113,18 @@ app.get('/public-stats', async (req, res) => {
     }
 });
 
+// contact message
+app.post('/contact', async (req, res) => {
+     const message = req.body; 
+    
+    try {
+        const result = await contactCollection.insertOne(message);
+        res.send(result);
+    } catch (error) {
+        res.status(500).send({ message: "Failed to save message" });
+    }
+});
+
 
   //  app.get("/meals",async(req,res)=>{
   //   const meal = req.body
@@ -119,53 +132,50 @@ app.get('/public-stats', async (req, res) => {
   //   res.send(result)
   //  })
 
-// আপনার সার্ভারের এই অংশটুকু এভাবে আপডেট করুন
-
+ 
 
 app.get('/meals', async (req, res) => {
-    const { search, rating, maxPrice, sort, page, limit } = req.query;
+    const search = req.query.search || "";
+    const sort = req.query.sort || "";
+    const rating = req.query.rating || "";
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 8;
 
-    let query = {};
-    
-     if (search) {
-        query.foodName = { $regex: search, $options: 'i' };
+     let query = {
+        foodName: { $regex: search, $options: 'i' }
+    };
+
+     if (rating) {
+        query.rating = { 
+            $gte: parseFloat(rating)  
+        };
     }
-
-     if (rating && rating !== "") {
-        query.rating = { $gte: parseFloat(rating) };
-    }
-
-     if (maxPrice) {
-        query.price = { $lte: parseFloat(maxPrice) };
-    }
-
-     let sortOptions = {};
-    if (sort === 'asc') {
-        sortOptions.price = 1;  
-    } else if (sort === 'desc') {
-        sortOptions.price = -1; 
-    } else {
-        sortOptions.rating = -1;
-    }
-
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 8;
-    const skip = (pageNum - 1) * limitNum;
 
     try {
-        const meals = await mealsCollection.find(query)
+        const skip = (page - 1) * limit;
+
+         let sortOptions = {};
+        if (sort === 'asc') sortOptions.price = 1;
+        else if (sort === 'desc') sortOptions.price = -1;
+        else sortOptions._id = -1;  
+
+        const result = await mealsCollection
+            .find(query)
             .sort(sortOptions)
             .skip(skip)
-            .limit(limitNum)
+            .limit(limit)
             .toArray();
 
         const totalMeals = await mealsCollection.countDocuments(query);
-        const totalPage = Math.ceil(totalMeals / limitNum);
+        const totalPages = Math.ceil(totalMeals / limit);
 
-         res.send({ meals, totalPage });
+        res.send({
+            meals: result,
+            totalPage: totalPages,
+            totalCount: totalMeals
+        });
     } catch (error) {
-        console.error("Meals fetching error:", error);
-        res.status(500).send({ message: "Internal Server Error" });
+        res.status(500).send({ message: "Error fetching meals" });
     }
 });
 

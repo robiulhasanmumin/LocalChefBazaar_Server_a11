@@ -119,6 +119,38 @@ app.get('/public-stats', async (req, res) => {
     res.send(result)
    })
 
+app.get('/meals', async (req, res) => {
+    const { search, rating, maxPrice, sort, page, limit } = req.query;
+
+     let query = {};
+    if (search) query.foodName = { $regex: search, $options: 'i' };
+    if (rating) query.rating = { $gte: parseFloat(rating) };  
+    if (maxPrice) query.price = { $lte: parseFloat(maxPrice) };  
+
+     let sortOptions = {};
+    if (sort === 'asc') sortOptions.price = 1;  // Low to High
+    if (sort === 'desc') sortOptions.price = -1; // High to Low
+
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 8;
+
+    try {
+        const meals = await mealsCollection.find(query)
+            .sort(sortOptions)
+            .skip((pageNum - 1) * limitNum)
+            .limit(limitNum)
+            .toArray();
+
+        const totalMeals = await mealsCollection.countDocuments(query);
+        const totalPage = Math.ceil(totalMeals / limitNum);
+
+        res.send({ meals, totalPage });
+    } catch (error) {
+        res.status(500).send({ message: "Error" });
+    }
+});
+
+
 app.get("/meals/:id", async (req, res) => {
   const id = req.params.id;
   const query = {_id:new ObjectId(id)}

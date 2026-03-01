@@ -125,14 +125,32 @@ app.post('/contact', async (req, res) => {
     }
 });
 
+// update profile
+app.patch('/users/:email', verifyFBToken, async (req, res) => {
+    const email = req.params.email;
+    const updatedData = req.body; 
+     
+     if (req.user.email !== email) {
+        return res.status(403).send({ message: "Forbidden Access" });
+    }
 
-  //  app.get("/meals",async(req,res)=>{
+    const query = { email: email };
+    const updateDoc = {
+        $set: updatedData,
+    };
+
+    const result = await usersCollection.updateOne(query, updateDoc);
+    res.send(result);
+});
+
+
+// meals
+  
+//  app.get("/meals",async(req,res)=>{
   //   const meal = req.body
   //   const result = await mealsCollection.find(meal).sort({rating:-1}).toArray()
   //   res.send(result)
   //  })
-
- 
 
 app.get('/meals', async (req, res) => {
     const search = req.query.search || "";

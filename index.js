@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require('express')
 const cors = require('cors');
+const bcrypt = require('bcrypt');
 const app = express()
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
@@ -65,9 +66,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    // await client.connect();
-    const db = client.db("local_chef_bazaar_db")
+     const db = client.db("local_chef_bazaar_db")
     const mealsCollection = db.collection("meals")
     const reviewsCollection = db.collection("reviews")
     const usersCollection = db.collection('users')
@@ -129,7 +128,7 @@ app.post('/contact', async (req, res) => {
 app.patch('/users/:email', verifyFBToken, async (req, res) => {
     const email = req.params.email;
     const updatedData = req.body; 
-     
+
      if (req.user.email !== email) {
         return res.status(403).send({ message: "Forbidden Access" });
     }
@@ -141,6 +140,40 @@ app.patch('/users/:email', verifyFBToken, async (req, res) => {
 
     const result = await usersCollection.updateOne(query, updateDoc);
     res.send(result);
+});
+
+
+// bcrypt password update
+app.post('/users', async (req, res) => {
+    const user = req.body;
+    
+     if(user.password) {
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(user.password, salt);
+    }
+
+    const query = { email: user.email };
+    const existingUser = await usersCollection.findOne(query);
+    if (existingUser) return res.send({ message: 'User exists' });
+
+    const result = await usersCollection.insertOne(user);
+    res.send(result);
+});
+
+
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    const user = await usersCollection.findOne({ email });
+
+    if (!user) return res.status(404).send("User not found");
+
+     const isMatch = await bcrypt.compare(password, user.password);
+    
+    if (isMatch) {
+        res.send({ message: "Login Successful" });
+    } else {
+        res.status(401).send("Invalid Credentials");
+    }
 });
 
 

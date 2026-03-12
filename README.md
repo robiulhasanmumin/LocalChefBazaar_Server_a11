@@ -29,6 +29,23 @@ STRIPE_SECRET_KEY=your_stripe_secret_key
 ACCESS_TOKEN_SECRET=your_jwt_secret
 ```
 
+
+## 🗄️ Database Schema (MongoDB Atlas)
+
+The project uses a structured NoSQL database with the following key collections:
+
+| Collection Name | Description |
+| :--- | :--- |
+| **users** | Stores user profiles, roles (Admin/Chef/User), and account details. |
+| **meals** | Contains all meal listings with titles, prices, and chef information. |
+| **order_collection** | Tracks all meal orders placed by customers. |
+| **payments** | Records successful Stripe transaction details and history. |
+| **reviews** | Stores customer feedback and ratings for specific meals. |
+| **request** | Manages requests (e.g., users applying to become a Chef). |
+| **favourites** | Maintains a list of bookmarked or favorite meals for users. |
+| **contactMessages** | Stores inquiries and messages sent via the contact form. |
+
+
 ## 🏃 Installation & Local Setup
 
 Follow these steps to run the frontend on your local machine:
@@ -36,13 +53,7 @@ Follow these steps to run the frontend on your local machine:
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/robiulhasanmumin/LocalChefBazaar_Server_a11/
+   cd LocalChefBazaar_Server_a11
    npm install
-   
+   npm start
 ```
-
-Method,Endpoint,Description
-POST,/jwt,Create a secure JWT token for authentication.
-GET,/meals,Fetch all available meal listings from the database.
-POST,/payments,Process and store Stripe payment transactions.
-PATCH,/users/admin/:id,Update a specific user's role to Admin.
-GET,/chef-orders,Fetch orders specific to the logged-in Chef.

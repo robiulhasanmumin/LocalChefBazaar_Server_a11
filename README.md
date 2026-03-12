@@ -27,7 +27,7 @@ DB_USER=your_mongodb_username
 DB_PASS=your_mongodb_password
 STRIPE_SECRET_KEY=your_stripe_secret_key
 ACCESS_TOKEN_SECRET=your_jwt_secret
-
+```
 
 ## 🏃 Installation & Local Setup
 
@@ -35,4 +35,14 @@ Follow these steps to run the frontend on your local machine:
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/your-username/local-chef-client.git](https://github.com/your-username/local-chef-client.git)
+   git clone https://github.com/robiulhasanmumin/LocalChefBazaar_Server_a11/
+   npm install
+   
+```
+
+Method,Endpoint,Description
+POST,/jwt,Create a secure JWT token for authentication.
+GET,/meals,Fetch all available meal listings from the database.
+POST,/payments,Process and store Stripe payment transactions.
+PATCH,/users/admin/:id,Update a specific user's role to Admin.
+GET,/chef-orders,Fetch orders specific to the logged-in Chef.

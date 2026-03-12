@@ -56,4 +56,3 @@ Follow these steps to run the frontend on your local machine:
    cd LocalChefBazaar_Server_a11
    npm install
    npm start
-```
